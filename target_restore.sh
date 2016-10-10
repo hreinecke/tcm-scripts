@@ -43,9 +43,6 @@ restore_backstore() {
 			val=$*
 			val=${val#T10 VPD Unit Serial Number: }
 		    elif [ "${attr##*/}" = "vendor_id" ] ; then
-			shift
-			shift
-			shift
 			val=$1
 		    else
 			val=$*
