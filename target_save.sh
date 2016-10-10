@@ -56,6 +56,19 @@ print_fabric() {
 		continue
 	    fi
 	    val=$(cat $a)
+	    if [[ x"$val" = x15 && x"${attr##*/}" = xalua_access_state ]]; then
+	        tmofile=$TCM_ROOT/${attr//alua_access_state/implicit_trans_secs}
+		tmo=$(cat $tmofile)
+	        [[ -n "$tmo" ]] || tmo=1
+		i=0
+		echo "$attr is ALUA_ACCESS_STATE_TRANSITION, waiting max $tmo s" >&2
+		while [[ $i -lt $tmo && x$val = x15 ]]; do
+		   sleep 1
+		   val=$(cat $a)
+		   i=$((i+1))
+	        done
+		[[ x$val != x15 ]] || echo "WARNING: $attr is still ALUA_ACCESS_STATE_TRANSITION" >&2
+	    fi
 	    if [ -n "$val" ] ; then
 		echo "attr ${attr} $val"
 	    fi
