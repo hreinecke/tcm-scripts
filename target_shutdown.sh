@@ -12,6 +12,7 @@ shutdown_fcoe() {
 shutdown_fabric() {
     local fabric=$TCM_ROOT/$1
 
+    [[ -d "$fabric" ]] || return
     for p in ${fabric}/* ; do
 	[ -d $p ] || continue
 	[ "${p##*/}" = "discovery_auth" ] && continue
