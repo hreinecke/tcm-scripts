@@ -22,7 +22,7 @@ test_and_set_value() {
     fi
 }
 
-imgdir=/abuild/target
+imgdir=/dev/shm
 img=disk1.img
 size=4096
 bs=fileio_0
