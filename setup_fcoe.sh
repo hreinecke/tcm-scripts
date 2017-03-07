@@ -48,9 +48,9 @@ prim_tpg="default_tg_pt_gp"
 sec_tpg="secondary_tg_pt_gp"
 
 target_0=20:00:0c:fd:37:d4:44:7a
-target_1=20:00:0c:fd:37:74:8a:d2
+target_1=20:00:0c:fd:37:d4:44:7b
 initiator_0=20:00:0c:fd:37:04:1a:1e
-initiator_1=20:00:0c:fd:37:92:11:ac
+initiator_1=20:00:0c:fd:37:04:1a:1f
 
 if [ ! -d /sys/kernel/config ] ; then
     modprobe target_core_mod
