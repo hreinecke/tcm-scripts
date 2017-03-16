@@ -1,76 +1,149 @@
 #!/bin/bash
 
-hba=fileio_0/disk1
-iscsi=/sys/kernel/config/target/iscsi
+imgdir=/home/kvm
+img0=disk0.img
+img1=disk1.img
+wwid0=5019b2a1-71d7-415e-b2ef-6aebe4ceca20
+wwid1=138b7919-e5d2-433f-99da-2ca9f1523538
+size=2048
+tcm_iscsi=/sys/kernel/config/target/iscsi
 core=/sys/kernel/config/target/core
+prim_tpg="default_tg_pt_gp"
 sec_tpg="secondary_tg_pt_gp"
 
 iqn="iqn.1996-04.de.suse:01:4f89e0ecb85c"
-nic0="eth2"
-nic1="eth3"
+nic0="iscsi0"
+nic1="iscsi2"
 
-if [ ! -d ${core}/${hba} ] ; then
-    tcm_node --fileio=$hba /abuild/target/disk1.img 536870912
-fi
-[ -d ${core}/${hba} ] || exit 1
-if [ ! -d ${core}/${hba}/alua/${sec_tpg} ] ; then
-    tcm_node --addtgptgp=$hba secondary_tg_pt_gp
-fi
+test_and_set_value() {
+    attr=$1
+    new_val=$2
 
-for t in ${iscsi}/${iqn}/tpgt_* ; do
-    [ -d ${d} ] || continue
-    tpgt=${t##*tpgt_}
-    if [ "$tpgt" = "0" ] ; then
-	tpgt0=1
+    [ -f ${attr} ] || return 0
+    read orig_val < ${attr}
+    if [ -z "$orig_val" ] || [ ${orig_val} -ne ${new_val} ] ; then
+	echo ${new_val} > ${attr}
+	if [ $? -ne 0 ] ; then
+	    echo "Failed to set ${attr}"
+	    exit 1
+	fi
     fi
-    if [ "$tpgt" = "1" ] ; then
-	tpgt1=1
+}
+
+if [ ! -d /sys/kernel/config ] ; then
+    modprobe target_core_mod
+    modprobe iscsi_core_mod
+fi
+
+#
+# configure fileio
+#
+imgnum=0
+for img in $img0 $img1 $img2 ; do
+    if [ ! -f ${imgdir}/${img} ] ; then
+	[ -d ${imgdir} ] || mkdir ${imgdir}
+	dd if=/dev/zero of=${imgdir}/${img} bs=1M count=${size} conv=sparse
     fi
+    if [ ! -f ${imgdir}/${img} ] ; then
+	echo "Image file ${imgdir}/${img} not found"
+	exit 1
+    fi
+
+    bs=fileio_${imgnum}
+    disk=fd_${imgnum}
+    hba=${bs}/${disk}
+    imgnum=$(expr $imgnum + 1)
+    imgsize=$(stat -c "%s" ${imgdir}/${img})
+    if [ ! -d ${core}/${hba} ] ; then
+	[ -d ${core}/${hba} ] || mkdir -p ${core}/${hba}
+
+	echo "Create ${hba} image ${img}"
+	echo "fd_dev_name=${imgdir}/${img},fd_dev_size=${imgsize}" > ${core}/${hba}/control
+	if [ "$img" = "$img0" ] ; then
+	    wwid=${wwid0}
+	elif [ "$img" = "$img1" ] ; then
+	    wwid=${wwid1}
+	else
+	    wwid=${wwid2}
+	fi
+	echo ${wwid} > ${core}/${hba}/wwn/vpd_unit_serial
+	echo 1 > ${core}/${hba}/enable
+    fi
+
+    #
+    # configure ALUA
+    #
+    if [ ! -d ${core}/${hba}/alua/${prim_tpg} ] ; then
+	echo "Target not configured"
+	exit 1
+    fi
+
+    # test_and_set_value ${core}/${hba}/enable 1
+
+    test_and_set_value ${core}/${hba}/alua/${prim_tpg}/tg_pt_gp_id 0
+    test_and_set_value ${core}/${hba}/alua/${prim_tpg}/alua_access_state 0
+    echo 1 > ${core}/${hba}/alua/${prim_tpg}/alua_access_type
+    echo 0 > ${core}/${hba}/alua/${prim_tpg}/alua_support_offline
+    echo 0 > ${core}/${hba}/alua/${prim_tpg}/alua_support_unavailable
+    echo 0 > ${core}/${hba}/alua/${prim_tpg}/alua_support_lba_dependent
+    test_and_set_value ${core}/${hba}/alua/${prim_tpg}/implicit_trans_secs 30
+
+    if [ ! -d ${core}/${hba}/alua/${sec_tpg} ] ; then
+	mkdir ${core}/${hba}/alua/${sec_tpg}
+	if [ $? -ne 0 ] ; then
+	    echo "Failed to create ${core}/${hba}/alua/${sec_tpg}"
+	    exit 1
+	fi
+    fi
+
+    test_and_set_value ${core}/${hba}/alua/${sec_tpg}/tg_pt_gp_id 16
+    test_and_set_value ${core}/${hba}/alua/${sec_tpg}/alua_access_state 1
+    echo 1 > ${core}/${hba}/alua/${sec_tpg}/alua_access_type
+    echo 0 > ${core}/${hba}/alua/${sec_tpg}/alua_support_offline
+    echo 0 > ${core}/${hba}/alua/${sec_tpg}/alua_support_unavailable
+    echo 0 > ${core}/${hba}/alua/${sec_tpg}/alua_support_lba_dependent
+    test_and_set_value ${core}/${hba}/alua/${sec_tpg}/implicit_trans_secs 30
 done
-if [ -z "$tpgt0" ] ; then
-    lio_node --addtpg=${iqn} 0
-fi
 
-if [ -z "$tpgt1" ] ; then
-    lio_node --addtpg=${iqn} 1
-fi
+#
+# configure iscsi
+#
+[ -d ${tcm_iscsi} ] || mkdir ${tcm_iscsi} || exit 1
 
-for p in ${iscsi}/${iqn}/tpgt_0/np/* ; do
-    [ -d $p ] || continue
-    portal0=${p##*/};
+[ -d ${tcm_iscsi}/${iqn} ] || mkdir ${tcm_iscsi}/${iqn} || exit 1
+
+#
+# Map LUNs
+#
+n=0
+for nic in $nic0 $nic1 ; do
+    tpgt="tpgt_${n}"
+    t="${tcm_iscsi}/${iqn}/${tpgt}"
+    [ -d ${t} ] || mkdir ${t} || exit 1
+
+    num_lun=0
+    for l in ${core}/fileio_*/fd_* ; do
+	[ -d ${l} ] || continue
+	[ -d ${t}/lun/lun_${num_lum} ] || mkdir ${t}/lun/lun_${num_lun}
+	[ -L ${t}/lun/lun_${num_lun}/mapped_lun ] || continue
+	ln -s ${l} ${t}/lun/lun_${num_lun}/mapped_lun 2> /dev/null
+	if [ ${tpgt} == "tpgt_1" ] ; then
+	    echo ${sec_tpg} > ${t}/lun/lun_${num_lun}/alua_tg_pt_gp
+	fi
+	(( num_lun++ ))
+    done
+
+    ip=$(ip addr show dev $nic | sed -n 's/ *inet \(.*\)\/[0-9]* scope global .*/\1/p')
+    if [ -z "$ip" ] ; then
+	echo "Missing IP address for if $nic"
+	n=$(expr $n + 1)
+	continue;
+    fi
+    np="${t}/np/${ip}:3260"
+    [ -d "$np" ] || mkdir $np || exit
+    test_and_set_value ${t}/attrib/demo_mode_write_protect 0
+    test_and_set_value ${t}/attrib/authentication 0
+    test_and_set_value ${t}/enable 1
+    n=$(expr $n + 1)
 done
 
-for p in ${iscsi}/${iqn}/tpgt_1/np/* ; do
-    [ -d $p ] || continue
-    portal1=${p##*/};
-done
-
-if [ -z "$portal0" ] ; then
-    ip0=$(ip addr show dev $nic0 | sed -n 's/ *inet \(.*\)\/[0-9]* brd .*/\1/p')
-    lio_node --addnp=${iqn} 0 ${ip0}:3260 || exit 1
-fi
-
-if [ -z "$portal1" ] ; then
-    ip1=$(ip addr show dev $nic1 | sed -n 's/ *inet \(.*\)\/[0-9]* brd .*/\1/p')
-    lio_node --addnp=${iqn} 1 ${ip1}:3260 || exit 1
-fi
-
-if [ ! -d ${iscsi}/${iqn}/tpgt_0/lun/lun_0 ] ; then
-    lio_node --addlun=${iqn} 0 0 ${ip0}:3260 ${hba}
-    lio_node --disableauth=${iqn} 0
-    lio_node --permissive=${iqn} 0
-    lio_node --enabletpg=${iqn} 0
-fi
-
-echo 0 > ${iscsi}/${iqn}/tpgt_0/attrib/demo_mode_write_protect
-
-if [ ! -d ${iscsi}/${iqn}/tpgt_1/lun/lun_0 ] ; then
-    lio_node --addlun=${iqn} 1 0 ${ip1}:3260 ${hba}
-    lio_node --disableauth=${iqn} 1
-    lio_node --permissive=${iqn} 1
-    lio_node --enabletpg=${iqn} 1
-fi
-echo secondary_tg_pt_gp > ${iscsi}/${iqn}/tpgt_1/lun/lun_0/alua_tg_pt_gp
-echo 0 > ${iscsi}/${iqn}/tpgt_1/attrib/demo_mode_write_protect
-
-tcm_node --listtgptgps=${hba}
