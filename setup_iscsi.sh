@@ -21,7 +21,7 @@ test_and_set_value() {
 
     [ -f ${attr} ] || return 0
     read orig_val < ${attr}
-    if [ -z "$orig_val" ] || [ ${orig_val} -ne ${new_val} ] ; then
+    if [ -z "$orig_val" ] || [ ${orig_val} != ${new_val} ] ; then
 	echo ${new_val} > ${attr}
 	if [ $? -ne 0 ] ; then
 	    echo "Failed to set ${attr}"
@@ -73,38 +73,35 @@ for img in $img0 $img1 $img2 ; do
     #
     # configure ALUA
     #
-    if [ ! -d ${core}/${hba}/alua/${prim_tpg} ] ; then
-	echo "Target not configured"
-	exit 1
-    fi
-
-    # test_and_set_value ${core}/${hba}/enable 1
-
-    test_and_set_value ${core}/${hba}/alua/${prim_tpg}/tg_pt_gp_id 0
-    test_and_set_value ${core}/${hba}/alua/${prim_tpg}/alua_access_state 0
-    echo 1 > ${core}/${hba}/alua/${prim_tpg}/alua_access_type
-    echo 0 > ${core}/${hba}/alua/${prim_tpg}/alua_support_offline
-    echo 0 > ${core}/${hba}/alua/${prim_tpg}/alua_support_unavailable
-    echo 0 > ${core}/${hba}/alua/${prim_tpg}/alua_support_lba_dependent
-    test_and_set_value ${core}/${hba}/alua/${prim_tpg}/implicit_trans_secs 30
-
-    if [ ! -d ${core}/${hba}/alua/${sec_tpg} ] ; then
-	mkdir ${core}/${hba}/alua/${sec_tpg}
-	if [ $? -ne 0 ] ; then
-	    echo "Failed to create ${core}/${hba}/alua/${sec_tpg}"
+    for alua in ${core}/${hba}/alua/${prim_tpg} ${core}/${hba}/alua/${sec_tpc} ; do
+	if [ ! -d ${alua} ] ; then
+	    echo "Target not configured"
 	    exit 1
 	fi
-    fi
 
-    test_and_set_value ${core}/${hba}/alua/${sec_tpg}/tg_pt_gp_id 16
-    test_and_set_value ${core}/${hba}/alua/${sec_tpg}/alua_access_state 1
-    echo 1 > ${core}/${hba}/alua/${sec_tpg}/alua_access_type
-    echo 0 > ${core}/${hba}/alua/${sec_tpg}/alua_support_offline
-    echo 0 > ${core}/${hba}/alua/${sec_tpg}/alua_support_unavailable
-    echo 0 > ${core}/${hba}/alua/${sec_tpg}/alua_support_lba_dependent
-    test_and_set_value ${core}/${hba}/alua/${sec_tpg}/implicit_trans_secs 30
+	if [ "${alua}" = "${core}/${hba}/alua/${prim_tpg}" ] ; then
+	    test_and_set_value ${alua}/tg_pt_gp_id 0
+	    test_and_set_value ${alua}/alua_access_state 0
+	else
+	    test_and_set_value ${alua}/tg_pt_gp_id 16
+	    test_and_set_value ${alua}/alua_access_state 1
+	fi
+	test_and_set_value ${alua}/alua_access_status 0
+	test_and_set_value ${alua}/alua_access_type 1
+	test_and_set_value ${alua}/alua_support_active_nonoptimized 0
+	test_and_set_value ${alua}/alua_support_active_optimized 1
+	test_and_set_value ${alua}/alua_support_standby 1
+	test_and_set_value ${alua}/alua_support_transitioning 1
+	test_and_set_value ${alua}/alua_support_offline 0
+	test_and_set_value ${alua}/alua_support_unavailable 0
+	test_and_set_value ${alua}/alua_support_write_metadata 0
+	test_and_set_value ${alua}/alua_support_lba_dependent 0
+	test_and_set_value ${alua}/implicit_trans_secs 30
+	test_and_set_value ${alua}/nonop_delay_msecs 100
+	test_and_set_value ${alua}/preferred 0
+	test_and_set_value ${alua}/trans_delay_msecs 0
+    done
 done
-
 #
 # configure iscsi
 #
@@ -124,11 +121,20 @@ for nic in $nic0 $nic1 ; do
     num_lun=0
     for l in ${core}/fileio_*/fd_* ; do
 	[ -d ${l} ] || continue
-	[ -d ${t}/lun/lun_${num_lum} ] || mkdir ${t}/lun/lun_${num_lun}
-	[ -L ${t}/lun/lun_${num_lun}/mapped_lun ] || continue
-	ln -s ${l} ${t}/lun/lun_${num_lun}/mapped_lun 2> /dev/null
+	[ -d ${t}/lun/lun_${num_lun} ] || mkdir ${t}/lun/lun_${num_lun}
+	for ml in ${t}/lun/lun_${num_lun}/* ; do
+		if [ -L $ml ] ; then
+			mapped_lun=$ml
+			break;
+		fi
+	done
+	if [ -n "$mapped_lun" ] ; then
+		continue
+	else
+		ln -s ${l} ${t}/lun/lun_${num_lun}/mapped_lun
+	fi
 	if [ ${tpgt} == "tpgt_1" ] ; then
-	    echo ${sec_tpg} > ${t}/lun/lun_${num_lun}/alua_tg_pt_gp
+		echo ${sec_tpg} > ${t}/lun/lun_${num_lun}/alua_tg_pt_gp
 	fi
 	(( num_lun++ ))
     done
@@ -146,4 +152,3 @@ for nic in $nic0 $nic1 ; do
     test_and_set_value ${t}/enable 1
     n=$(expr $n + 1)
 done
-
