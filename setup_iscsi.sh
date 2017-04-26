@@ -112,7 +112,7 @@ done
 #
 # Map LUNs
 #
-n=0
+n=1
 for nic in $nic0 $nic1 ; do
     tpgt="tpgt_${n}"
     t="${tcm_iscsi}/${iqn}/${tpgt}"
@@ -133,7 +133,7 @@ for nic in $nic0 $nic1 ; do
 	else
 		ln -s ${l} ${t}/lun/lun_${num_lun}/mapped_lun
 	fi
-	if [ ${tpgt} == "tpgt_1" ] ; then
+	if [ ${tpgt} == "tpgt_2" ] ; then
 		echo ${sec_tpg} > ${t}/lun/lun_${num_lun}/alua_tg_pt_gp
 	fi
 	(( num_lun++ ))
