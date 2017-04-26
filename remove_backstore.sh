@@ -2,7 +2,7 @@
 
 core=/sys/kernel/config/target/core
 
-for f in ${core}/fileio_* ; do
+for f in ${core}/fileio_* ${core}/iblock_* ; do
     [ -d $f ] || continue
     for d in ${f}/* ; do
 	[ -d $d ] || continue
