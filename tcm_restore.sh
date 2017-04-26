@@ -135,6 +135,7 @@ setup_iblock() {
 
 gen_fc_port_name() {
     local port_num
+    local i j p
 
     port_num=${1#naa.}
     for i in $(seq 1 2 13) ; do
@@ -144,6 +145,70 @@ gen_fc_port_name() {
     done
     p=$(echo $port_num | cut --bytes=15-16)
     printf "%02x\n" $(( 16#$p ))
+}
+
+setup_fc_acl_luns() {
+    local jsonobj=$1
+    local nname=$2
+    local l j v
+    local idx lname alias tpg_lun tdir wp
+
+    l=0
+    while [ true ] ; do
+	j="${jsonobj}.mapped_luns[$l]"
+	v=$(cat $JSON | jq -c "${j}.index")
+	idx=$(eval echo $v)
+	[ "$idx" = "null" ] && break
+
+	lname=$nname/lun_${idx}
+	if [ ! -d ${lname} ] ; then
+	    mkdir ${lname} || exit 1
+	fi
+	v=$(cat $JSON | jq -c "${j}.alias")
+	alias=$(eval echo $v)
+	if [ "$alias" = "null" ] ; then
+	    alias="mapped_lun"
+	fi
+	v=$(cat $JSON | jq -c "${j}.tpg_lun")
+	tpg_lun=$(eval echo $v)
+	tdir=${nname%/acls/*}
+	ln -s ${tdir}/lun/lun_$tpg_lun $alias || exit 1
+	v=$(cat $JSON | jq -c "${j}.write_protect")
+	if [ $(eval echo $v) = "true" ] ; then
+	    wp=1
+	else
+	    wp=0
+	fi
+	v=$(cat $nname/write_protect)
+	if [ "$v" != "$wp" ] ; then
+	    echo "$wp" > $nname/write_protect
+	fi
+	(( l++ ))
+    done
+}
+
+setup_fc_acls() {
+    local jsonobj=$1
+    local tname=$2
+    local n
+    local j
+    local v
+    local w
+    local wwn nname
+
+    n=0
+    while [ true ] ; do
+	j="${jsonobj}.node_acls[$n]"
+	v=$(cat $JSON | jq -c "${j}.node_wwn")
+	w=$(eval echo $v)
+	[ "$w" = "null" ] && break
+	wwn=$(gen_fc_port_name $w)
+	nname=${tname}/${wwn}
+	if [ ! -d ${nname} ] ; then
+	    mkdir ${nname} || exit 1
+	fi
+	setup_fc_mapped_luns $j $nname
+    done
 }
 
 setup_fc_luns() {
@@ -224,6 +289,7 @@ setup_fc() {
 	    mkdir ${tname} || exit 1
 	fi
 	setup_fc_luns $jo $tname
+	setup_fc_acls $jo $tname
 	(( t++ ))
     done
 }
