@@ -21,6 +21,12 @@ MAC_FCOE_1=0c:fd:37:d4:44:7b
 VLAN_0=210
 VLAN_1=200
 
+##check if the FCoE module is loaded, otherwise terminate
+if ! lsmod | grep "fcoe" &> /dev/null; then
+    echo "FCoE module not found, please load the FCoE module first using \"modprobe fcoe"\"
+    exit 1
+fi
+
 gen_mac_address() {
     # This is the SUSE OUI
     OUI=0x0cfd37
