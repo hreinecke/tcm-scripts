@@ -4,7 +4,13 @@
 #
 # create a veth link with one end into the bridge, and
 # the other one to be used a portal interface for the iscsi target
-# 
+#
+
+##check if the user has root access
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
 
 gen_mac_address() {
     # This is the SUSE OUI

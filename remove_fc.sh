@@ -1,5 +1,11 @@
 #!/bin/bash
 
+##check if the user has root access
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
 fc=/sys/kernel/config/target/fc
 
 for wwpn in ${fc}/??:??:??:??:??:??:??:?? ; do

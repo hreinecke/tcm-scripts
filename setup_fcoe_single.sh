@@ -48,11 +48,7 @@ test_and_set_value() {
 
 imgdir=/home/kvm
 img0=sles-mpath-0.img
-img1=sles-mpath-1.img
-img2=sles-mpath-2.img
 wwid0=2969579b-c1a2-4181-a963-fe7c57bed635
-wwid1=3d24a64c-9cd6-4552-8a3e-15bb2a823e65
-wwid2=a59a43bd-1ba7-494c-be4c-fe6ddd8d6643
 size=2048
 tcm_fc=/sys/kernel/config/target/fc
 core=/sys/kernel/config/target/core
@@ -73,7 +69,7 @@ fi
 # configure fileio
 #
 imgnum=0
-for img in $img0 $img1 $img2 ; do
+for img in $img0 ; do
     if [ ! -f ${imgdir}/${img} ] ; then
 	[ -d ${imgdir} ] || mkdir ${imgdir}
 	dd if=/dev/zero of=${imgdir}/${img} bs=1M count=${size} conv=sparse
@@ -95,10 +91,6 @@ for img in $img0 $img1 $img2 ; do
 	echo "fd_dev_name=${imgdir}/${img},fd_dev_size=${imgsize}" > ${core}/${hba}/control
 	if [ "$img" = "$img0" ] ; then
 	    wwid=${wwid0}
-	elif [ "$img" = "$img1" ] ; then
-	    wwid=${wwid1}
-	else
-	    wwid=${wwid2}
 	fi
 	echo ${wwid} > ${core}/${hba}/wwn/vpd_unit_serial
 	echo 1 > ${core}/${hba}/enable

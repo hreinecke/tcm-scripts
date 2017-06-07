@@ -1,5 +1,11 @@
 #!/bin/bash
 
+##check if the user has root access
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
 gen_sas_address() {
     prefix="naa.6001405"
     uuid=$(uuidgen | sed 's/-//g' | tail --bytes 10)
