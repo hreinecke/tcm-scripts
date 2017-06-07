@@ -1,5 +1,11 @@
 #!/bin/bash
 
+##check if the user has root access
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
 set -e
 TCM_ROOT=/sys/kernel/config/target
 TCM_CONF=/tmp/target.conf

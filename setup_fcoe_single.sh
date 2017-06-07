@@ -1,5 +1,11 @@
 #!/bin/bash
 
+##check if the user has root access
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
 ##check if the FCoE module is loaded, otherwise terminate
 if ! lsmod | grep "fcoe" &> /dev/null; then
     echo "FCoE module not found, please load the FCoE module first using \"modprobe fcoe"\"
