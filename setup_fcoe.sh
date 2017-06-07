@@ -1,5 +1,11 @@
 #!/bin/bash
 
+##check if the FCoE module is loaded, otherwise terminate
+if ! lsmod | grep "fcoe" &> /dev/null; then
+    echo "FCoE module not found, please load the FCoE module first using \"modprobe fcoe"\"
+    exit 1
+fi
+
 gen_sas_address() {
     prefix="naa.6001405"
     uuid=$(uuidgen | sed 's/-//g' | tail --bytes 10)
