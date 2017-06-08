@@ -6,6 +6,12 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
+##check if FCoE target exists, otherwise terminate
+if [ ! -d /sys/kernel/config/target/fc ]; then
+    echo "Please create a FCoE target first using "fcoe-target-setup"."
+    exit 1
+fi
+
 ##check if the FCoE module is loaded, otherwise terminate
 if ! lsmod | grep "fcoe" &> /dev/null; then
     echo "FCoE module not found, please load the FCoE module first using \"modprobe fcoe"\"
